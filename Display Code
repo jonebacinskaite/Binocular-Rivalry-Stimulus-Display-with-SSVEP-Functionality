@@ -1,0 +1,265 @@
+function [ key_data, experiment_info ] = BinocularRivalryDisplay
+
+% Clear the workspace and the screen
+sca;
+close all;
+clearvars;
+
+% Here we call some default settings for setting up Psychtoolbox
+PsychDefaultSetup(2);
+
+% Experimental parameters - adjust as needed
+trial_length = 10.0; %trial length in seconds
+start_delay = 10; %amount of time before stimulus onset
+frequencies = [1, 1]; %image flicker frequencies in Hz, options are: 7, 8, 10, 14, 16, 20, 25, 28, 
+RightFlickerPeriod = (1/frequencies(1));
+LeftFlickerPeriod = (1/frequencies(2));
+RightFlickerTasks = frequencies(1)*trial_length;
+LeftFlickerTasks = frequencies(2)*trial_length;
+
+% Get information about subject and experiment
+name = 'Subject Information';
+prompt = {'Subject ID:'; 'Trial date:'; 'Trial time:'; 'Select directory to save to:'; 'Trial Type:'};
+formats = struct('type', {}, 'style', {}, 'items', {},'format', {}, 'limits', {}, 'size', {});
+formats(1,1).type   = 'edit';
+formats(1,1).format = 'text';
+formats(1,2).type   = 'edit';
+formats(1,2).format = 'date';
+formats(1,2).limits  = 1;
+formats(1,3).type   = 'edit';
+formats(1,3).format = 'date';
+formats(1,3).limits  = 16;
+formats(2,1).type   = 'edit';
+formats(2,1).format = 'dir';
+formats(2,1).span   = [1 3];
+formats(3,1).type   = 'list';
+formats(3,1).style  = 'popupmenu';
+runType_arr = {'Rivalry', 'Replay','Practice','Test'};
+formats(3,1).items  = runType_arr;
+formats(3,1).span   = [1 2];
+%[experiment_info,canceled] = inputsdlg(prompt, name, formats);
+
+WaitSecs(5);
+
+% load images
+img0 = imread('restimg_grey_red+.png');
+% img1  = imread('1_BR_butterfly.jpg');
+% img2 = imread('2_BR_leaves.jpg');
+% img3 = imread('3_BR_inv_butterfly.jpg');
+% img4 = imread('4_BR_inv_leaves.jpg');
+img1  = imread('gabor_L45_red+.png');
+img2 = imread('gabor_R45_red+.png');
+img3 = imread('gabor_L45_red+.png');
+img4 = imread('gabor_R45_red+.png');
+currRightImg = img1;
+currLeftImg = img2;
+
+% set up the screen
+screens = Screen('Screens');                                                                    
+screenNumber = max(screens);
+white = WhiteIndex(screenNumber);
+black = BlackIndex(screenNumber);
+
+% set up the windows
+[window, windowRect] = PsychImaging('OpenWindow', screenNumber, black);
+[screenXpixels, screenYpixels] = Screen('WindowSize', window);
+[xCenter, yCenter] = RectCenter(windowRect);
+Screen('BlendFunction', window, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+smallerWindowRect = [cast(xCenter*0.5 - 100/2, 'double'), cast(yCenter*0.5 - 100/2, 'double'), cast(xCenter*0.5 + 100/2, 'double'), cast(yCenter*0.5 + 100/2, 'double')]
+smallerWindowRect2 = [cast(xCenter*1.5 - 100/2, 'double'), cast(yCenter*0.5 - 100/2, 'double'), cast(xCenter*1.5 + 100/2, 'double'), cast(yCenter*0.5 + 100/2, 'double')]
+% create booleans
+isRightReg = 1; %default true
+isLeftReg = 1; %default true
+trialRunning = 0; %default false
+
+% display background (grey) square
+Screen(window, 'PutImage', img0, smallerWindowRect, 'srcCopy')
+Screen(window, 'PutImage', img0, smallerWindowRect2, 'srcCopy')
+Screen('Flip', window);
+
+% Create the left image timer
+LnameArr = {'StartDelay', 'ExecutionMode', 'TasksToExecute', 'Period', 'BusyMode'};
+LvalArr = {start_delay, 'fixedRate', LeftFlickerTasks, LeftFlickerPeriod, 'queue'};
+L = timer;
+set(L, LnameArr, LvalArr);
+L.StartFcn = @startLeftFlicker;
+L.StopFcn = @stopLeftFlicker;
+L.TimerFcn = {@flickerLeft, img2, img4};
+    
+    function [] = startLeftFlicker(obj, event)
+        txt1 = ' left event occurred at ';
+        eventType = event.Type;
+        eventTime = datestr(event.Data.time);
+        msg = [eventType txt1 eventTime];
+        disp(msg);
+        trialRunning = 1; %trial running = true
+    end
+
+    function [] = stopLeftFlicker(obj, event)
+        txt1 = ' left event occurred at ';
+        eventType = event.Type;
+        eventTime = datestr(event.Data.time);
+        msg = [eventType txt1 eventTime];
+        disp(msg);
+        delete(L);
+        currLeftImg = img0; %changes to grey image
+        currRightImg = img0; %changes to grey image
+        Screen(window, 'PutImage', currLeftImg, smallerWindowRect, 'srcCopy')
+        Screen(window, 'PutImage', currRightImg, smallerWindowRect2, 'srcCopy')
+        Screen('Flip', window);
+        trialRunning = 0; %trial running = false
+    end
+    
+    function [] = flickerLeft(obj, event, img2, img4)
+        txt1 = ' left event occurred at ';
+        eventType = event.Type;
+        eventTime = datestr(event.Data.time);
+        msg = [eventType txt1 eventTime];
+        disp(msg);
+        
+        if isLeftReg == 1 %if currLeftImg = img2
+            currLeftImg = img4;
+            isLeftReg = 0;
+        else %if currLeftImg = img4
+            currLeftImg = img2;
+            isLeftReg = 1;
+        end
+        Screen(window, 'PutImage', currLeftImg, smallerWindowRect, 'srcCopy')
+        Screen(window, 'PutImage', currRightImg, smallerWindowRect2, 'srcCopy')
+        Screen('Flip', window);      
+    end
+
+% Create the right image timer
+RnameArr = {'StartDelay', 'ExecutionMode', 'TasksToExecute', 'Period', 'BusyMode'};
+RvalArr = {start_delay, 'fixedRate', RightFlickerTasks, RightFlickerPeriod, 'queue'};
+R = timer;
+set(R, RnameArr, RvalArr);
+R.StartFcn = @startRightFlicker;
+R.StopFcn = @stopRightFlicker;
+R.TimerFcn = {@FlickerRight, img1, img3};
+    
+    function [] = startRightFlicker(obj, event)
+        txt1 = ' right event occurred at ';
+        eventType = event.Type;
+        eventTime = datestr(event.Data.time);
+        msg = [eventType txt1 eventTime];
+        disp(msg);
+        trialRunning = 1; %trial running = true
+    end
+
+    function [] = stopRightFlicker(obj, event)
+        txt1 = ' right event occurred at ';
+        eventType = event.Type;
+        eventTime = datestr(event.Data.time);
+        msg = [eventType txt1 eventTime];
+        disp(msg);
+        delete(R);
+        currLeftImg = img0; %changes to grey image
+        currRightImg = img0; %changes to grey image
+        Screen(window, 'PutImage', currLeftImg, smallerWindowRect, 'srcCopy')
+        Screen(window, 'PutImage', currRightImg, smallerWindowRect2, 'srcCopy')
+        Screen('Flip', window);
+        trialRunning = 0; %trial running = false
+    end
+    
+    function [] = FlickerRight(obj, event, img1, img3)
+        txt1 = ' right event occurred at ';
+        eventType = event.Type;
+        eventTime = datestr(event.Data.time);
+        msg = [eventType txt1 eventTime];
+        disp(msg);
+        
+        if isRightReg == 1 %if currRightImg = img1
+            currRightImg = img3;
+            isRightReg = 0;
+        else %if currRightImg = img3
+            currRightImg = img1;
+            isRightReg = 1;
+        end
+
+        Screen(window, 'PutImage', currRightImg, smallerWindowRect2, 'srcCopy')
+        Screen(window, 'PutImage', currLeftImg, smallerWindowRect, 'srcCopy')
+        Screen('Flip', window);       
+    end
+
+% Prepare for Keyboard input
+key_data = zeros([], 3); % prepare array for data collection
+KbName('UnifyKeyNames');
+keys = [27, 32, 97, 98];
+keyList = zeros(1, 256);
+keyList(keys) = 1;
+KbQueueCreate(0, keyList);
+KbQueueStart();
+ListenChar(2);
+disp('press spacebar to start');
+pressed = 0;
+counter = 1;
+
+% get start time
+KbStrokeWait;
+KbQueueFlush();
+t0 = GetSecs();
+disp('Started at:');
+disp(t0);
+
+% display BR stimuli
+ start(L);
+ start(R);
+ while trialRunning ~= 0 
+     if GetSecs > (t0 + start_delay)
+         [pressed, firstpress, firstrelease] = KbQueueCheck();
+        if firstpress(97) > 0
+            %disp('1 pressed');
+            key_data(counter, 1) = firstpress(97);
+            key_data(counter, 2) = 1;
+        elseif firstrelease(97) > 0;
+            %disp('1 released');
+            key_data(counter, 1) = firstrelease(97);
+            key_data(counter, 2) = 2;
+        end
+        if firstpress(98) > 0
+            %disp('2 pressed');
+            key_data(counter, 1) = firstpress(98);
+            key_data(counter, 3) = 1;
+        elseif firstrelease(98) > 0;
+            %disp('2 released');
+            key_data(counter, 1) = firstrelease(98);
+            key_data(counter, 3) = 2;
+        end
+        WaitSecs(0.01);
+        counter = counter + 1;
+     end
+ end
+
+% Saves input data
+% formatSpec = '%s_%s_%d-%d-%d_%d-%d';
+% ID = experiment_info{1,1};
+% TT = runType_arr{1,experiment_info{5,1}};
+% DD = experiment_info{2,1}(1,3);
+% DM = experiment_info{2,1}(1,2);
+% DY = experiment_info{2,1}(1,1);
+% TH = experiment_info{3,1}(1,4);
+% TM = experiment_info{3,1}(1,5);
+% folderStr = sprintf(formatSpec,ID,TT,DD,DM,DY,TH,TM);
+% DIR = experiment_info{4,1};
+% mkdir(DIR, folderStr);
+% save(fullfile(DIR, folderStr, 'key_data'));
+%save(fullfile(DIR, folderStr, 'experiment_info'));
+
+% allows user to exit display by pressing any key
+disp('Ended. Press escape key to close');
+KbStrokeWait;
+PsychHID('KbQueueRelease', 1);
+PsychHID('KbQueueStop', 1);
+ListenChar(0);
+
+% screen close all
+sca;
+
+% write to python script?
+system('python "Z:\Science Groups\VR-EEG Group\FoveEyeTrack\write_to_video.py" --output example8.avi');
+
+% PRACTICE CODE AND/OR GARBAGE CODE BELOW HERE
+
+% end of encapsulating function
+end
